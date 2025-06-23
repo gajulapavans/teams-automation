@@ -1,0 +1,55 @@
+name: Add All Org Members to Team
+
+on:
+  workflow_dispatch:
+    inputs:
+      team_name:
+        description: 'GitHub team to add members to'
+        required: true
+      team_permission:
+        description: 'Repo permission for the team (pull, push, admin)'
+        required: true
+        default: 'push'
+
+jobs:
+  add-org-members:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get install jq
+
+      - name: Fetch org members
+        id: get-members
+        run: |
+          MEMBERS=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/orgs/${{ secrets.GH_ORG_NAME }}/members | jq -r '.[].login')
+          echo "members=$MEMBERS" >> $GITHUB_ENV
+
+      - name: Create team (ignore if exists)
+        run: |
+          curl -X POST https://api.github.com/orgs/${{ secrets.GH_ORG_NAME }}/teams \
+          -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+          -H "Accept: application/vnd.github+json" \
+          -d '{
+            "name": "${{ github.event.inputs.team_name }}",
+            "privacy": "closed"
+          }' || echo "Team may already exist."
+
+      - name: Grant team access to current repo
+        run: |
+          curl -X PUT https://api.github.com/orgs/${{ secrets.GH_ORG_NAME }}/teams/${{ github.event.inputs.team_name }}/repos/${{ github.repository }} \
+          -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+          -H "Accept: application/vnd.github+json" \
+          -d '{"permission": "${{ github.event.inputs.team_permission }}"}'
+
+      - name: Add each member to the team
+        run: |
+          for user in $members; do
+            echo "Adding $user to team..."
+            curl -X PUT https://api.github.com/orgs/${{ secrets.GH_ORG_NAME }}/teams/${{ github.event.inputs.team_name }}/memberships/$user \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d '{"role": "member"}'
+          done
