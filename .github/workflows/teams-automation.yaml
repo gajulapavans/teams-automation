@@ -1,0 +1,20 @@
+name: Create GitHub Team
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-team:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create GitHub Team using GitHub API
+        run: |
+          curl -X POST https://api.github.com/orgs/${{ secrets.GH_ORG_NAME }}/teams \
+          -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+          -H "Accept: application/vnd.github+json" \
+          -d '{
+            "name": "dev-team",
+            "description": "Team created via GitHub Actions",
+            "privacy": "closed"
+          }'
